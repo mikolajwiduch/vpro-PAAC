@@ -10,10 +10,16 @@ pipeline {
         jdk "JDK17"
     }
 
+       environment {
+        registryCredential = 'ecr:us-east-1:awscreds'
+        imageName = "533267294082.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg"
+        vprofileRegistry = "https://533267294082.dkr.ecr.us-east-1.amazonaws.com"
+    }
+
     stages {
         stage('Fetch code') {
             steps{
-                git branch: 'atom', url: 'https://github.com/hkhcoder/vprofile-project.git'
+                git branch: 'docker', url: 'https://github.com/hkhcoder/vprofile-project.git'
             }
         }
 
@@ -58,6 +64,7 @@ pipeline {
                 }
             }
         }
+        
         stage("Quality Gate"){
             steps {
                 timeout(time: 1, unit: 'HOURS') {
@@ -65,24 +72,30 @@ pipeline {
                 }
             }    
         }
-        stage("Upload Arfitaft"){
+
+        stage('Build App Image') {
+            steps {
+                script {
+                    dockerImage = docker.build( imageName + ":$BUILD_NUMBER", "./Docker-files/app/multistage/")
+                }
+            }
+        }
+
+        stage('Upload App Image') {
             steps{
-                nexusArtifactUploader(
-                nexusVersion: 'nexus3',
-                protocol: 'http',
-                nexusUrl: '172.31.86.104:8081',
-                groupId: 'QA',
-                version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
-                repository: 'vprofile-repo',
-                credentialsId: 'nexuslogin',
-                artifacts: [
-                    [artifactId: 'vproapp',
-                    classifier: '',
-                    file: 'target/vprofile-v2.war',
-                    type: 'war']
-            
-                ])
-            }  
+                script {
+                    docker.withRegistry( vprofileRegistry, registryCredential ) {
+                        dockerImage.push("$BUILD_NUMBER")
+                            dockerImage.push('latest')
+                    }
+                }
+            }
+        }
+
+        stage('Remove Container Images'){
+            steps{
+                sh 'docker rmi -f $(docker images -a -q)'
+            }
         }
     }
 
