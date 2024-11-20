@@ -14,6 +14,8 @@ pipeline {
         registryCredential = 'ecr:us-east-1:awscreds'
         imageName = "533267294082.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg"
         vprofileRegistry = "https://533267294082.dkr.ecr.us-east-1.amazonaws.com"
+        cluster = "vprofile"
+        service = "vprofileappsvc"
     }
 
     stages {
@@ -92,9 +94,16 @@ pipeline {
             }
         }
 
-        stage('Remove Container Images'){
+        stage('Remove Container Images') {
             steps{
                 sh 'docker rmi -f $(docker images -a -q)'
+            }
+        }
+        stage('Deploy to ECS') {
+            steps {
+                withAWS(credentials: 'awscreds', region: 'us-east-1') {
+                    sh 'aws ecs update-service --cluster ${cluster} --service ${service} --force-new-deployment'
+                }
             }
         }
     }
